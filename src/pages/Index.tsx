@@ -1,15 +1,17 @@
-import { useState, useRef } from "react";
-import { UserInputs, A2AResult, GeoResult, calculateA2A, calculateGeothermal } from "@/lib/calculations";
+import { useRef } from "react";
 import HeroSection from "@/components/HeroSection";
 import CalculatorForm from "@/components/CalculatorForm";
 import ResultsDashboard from "@/components/ResultsDashboard";
+import ResultsLoadingSkeleton from "@/components/ResultsLoadingSkeleton";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import Footer from "@/components/Footer";
-import { Leaf, Loader2 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useCalculator } from "@/hooks/useCalculator";
+import { useCalculatorForm } from "@/hooks/useCalculatorForm";
+import type { UserInputs } from "@/data/types";
 
 const Index = () => {
-  const [results, setResults] = useState<{ a2a: A2AResult; geo: GeoResult; inputs: UserInputs } | null>(null);
-  const [loading, setLoading] = useState(false);
+  const { results, loading, error, calculate, reset: resetResults } = useCalculator();
+  const formHook = useCalculatorForm();
   const resultsRef = useRef<HTMLDivElement>(null);
   const calcRef = useRef<HTMLDivElement>(null);
 
@@ -18,20 +20,16 @@ const Index = () => {
   };
 
   const handleCalculate = (inputs: UserInputs) => {
-    setLoading(true);
-    setResults(null);
-
-    // Brief loading animation for polish
+    const validationErrors = calculate(inputs);
+    if (validationErrors) {
+      formHook.setErrors(validationErrors);
+      // Scroll to calculator section on validation error
+      calcRef.current?.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
     setTimeout(() => {
-      const a2a = calculateA2A(inputs);
-      const geo = calculateGeothermal(inputs);
-      setResults({ a2a, geo, inputs });
-      setLoading(false);
-
-      setTimeout(() => {
-        resultsRef.current?.scrollIntoView({ behavior: "smooth" });
-      }, 100);
-    }, 800);
+      resultsRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 900);
   };
 
   return (
@@ -39,29 +37,25 @@ const Index = () => {
       <HeroSection onStart={handleStart} />
 
       <div ref={calcRef}>
-        <CalculatorForm onCalculate={handleCalculate} />
+        <CalculatorForm
+          onCalculate={handleCalculate}
+          formHook={formHook}
+        />
       </div>
 
-      <AnimatePresence>
-        {loading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex flex-col items-center justify-center py-20"
-          >
-            <div className="relative">
-              <Loader2 className="h-8 w-8 text-accent animate-spin" />
-              <Leaf className="h-4 w-4 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-            </div>
-            <p className="mt-4 text-muted-foreground font-medium">Crunching the numbers...</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <div ref={resultsRef}>
+        {loading && <ResultsLoadingSkeleton />}
+
+        {error && !loading && (
+          <div className="py-16 px-4 text-center">
+            <p className="text-destructive font-medium">{error}</p>
+          </div>
+        )}
+
         {results && !loading && (
-          <ResultsDashboard a2a={results.a2a} geo={results.geo} inputs={results.inputs} />
+          <ErrorBoundary fallbackTitle="Results rendering error">
+            <ResultsDashboard a2a={results.a2a} geo={results.geo} inputs={results.inputs} />
+          </ErrorBoundary>
         )}
       </div>
 

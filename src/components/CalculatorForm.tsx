@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { UserInputs, COURTYARD_DEFAULTS, MONTH_LABELS, type InsulationLevel } from "@/lib/calculations";
+import type { UserInputs, InsulationLevel, ValidationErrors } from "@/data/types";
+import { MONTH_LABELS } from "@/data/defaults";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,25 +11,24 @@ import TooltipIcon from "./TooltipIcon";
 
 interface CalculatorFormProps {
   onCalculate: (inputs: UserInputs) => void;
+  formHook: {
+    inputs: UserInputs;
+    showAdvanced: boolean;
+    errors: ValidationErrors;
+    update: <K extends keyof UserInputs>(key: K, val: UserInputs[K]) => void;
+    updateKwh: (idx: number, val: string) => void;
+    reset: () => void;
+    toggleAdvanced: () => void;
+  };
 }
 
-const CalculatorForm = ({ onCalculate }: CalculatorFormProps) => {
-  const [inputs, setInputs] = useState<UserInputs>({ ...COURTYARD_DEFAULTS });
-  const [showAdvanced, setShowAdvanced] = useState(false);
+const CalculatorForm = ({ onCalculate, formHook }: CalculatorFormProps) => {
+  const { inputs, showAdvanced, errors, update, updateKwh, reset, toggleAdvanced } = formHook;
 
-  const update = <K extends keyof UserInputs>(key: K, val: UserInputs[K]) =>
-    setInputs(prev => ({ ...prev, [key]: val }));
-
-  const updateKwh = (idx: number, val: string) => {
-    const n = parseInt(val) || 0;
-    setInputs(prev => {
-      const newKwh = [...prev.monthlyKwh];
-      newKwh[idx] = n;
-      return { ...prev, monthlyKwh: newKwh };
-    });
-  };
-
-  const reset = () => setInputs({ ...COURTYARD_DEFAULTS });
+  const fieldError = (key: string) =>
+    errors[key] ? (
+      <p className="text-sm text-destructive mt-1">{errors[key]}</p>
+    ) : null;
 
   return (
     <section id="calculator" className="py-16 px-4">
@@ -53,16 +52,19 @@ const CalculatorForm = ({ onCalculate }: CalculatorFormProps) => {
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
               {MONTH_LABELS.map((m, i) => (
                 <div key={m}>
-                  <Label className="text-xs text-muted-foreground mb-1 block">{m}</Label>
+                  <Label htmlFor={`kwh-${m}`} className="text-xs text-muted-foreground mb-1 block">{m}</Label>
                   <Input
+                    id={`kwh-${m}`}
                     type="number"
                     value={inputs.monthlyKwh[i]}
                     onChange={e => updateKwh(i, e.target.value)}
-                    className="text-sm"
+                    className={`text-sm ${errors.monthlyKwh ? 'border-destructive' : ''}`}
+                    aria-invalid={!!errors.monthlyKwh}
                   />
                 </div>
               ))}
             </div>
+            {fieldError('monthlyKwh')}
           </CardContent>
         </Card>
 
@@ -75,7 +77,7 @@ const CalculatorForm = ({ onCalculate }: CalculatorFormProps) => {
             {/* Area */}
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <Label>Home Size</Label>
+                <Label htmlFor="areaSqFt">Home Size</Label>
                 <TooltipIcon text="The total heated floor area of your home in square feet." />
               </div>
               <div className="flex items-center gap-4">
@@ -89,14 +91,17 @@ const CalculatorForm = ({ onCalculate }: CalculatorFormProps) => {
                 />
                 <div className="flex items-center gap-1">
                   <Input
+                    id="areaSqFt"
                     type="number"
                     value={inputs.areaSqFt}
                     onChange={e => update('areaSqFt', parseInt(e.target.value) || 400)}
-                    className="w-24 text-sm"
+                    className={`w-24 text-sm ${errors.areaSqFt ? 'border-destructive' : ''}`}
+                    aria-invalid={!!errors.areaSqFt}
                   />
                   <span className="text-sm text-muted-foreground">sq ft</span>
                 </div>
               </div>
+              {fieldError('areaSqFt')}
             </div>
 
             {/* Insulation */}
@@ -149,7 +154,7 @@ const CalculatorForm = ({ onCalculate }: CalculatorFormProps) => {
         {/* Advanced */}
         <Card className="mb-8">
           <button
-            onClick={() => setShowAdvanced(!showAdvanced)}
+            onClick={toggleAdvanced}
             className="w-full flex items-center justify-between p-6 text-left"
           >
             <span className="font-display font-semibold text-lg">Financial Settings</span>
@@ -160,27 +165,35 @@ const CalculatorForm = ({ onCalculate }: CalculatorFormProps) => {
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <Label>Electricity Rate ($/kWh)</Label>
+                    <Label htmlFor="electricityRate">Electricity Rate ($/kWh)</Label>
                     <TooltipIcon text="Your all-in electricity cost per kilowatt-hour. Liberty Utilities default is $0.2005/kWh." />
                   </div>
                   <Input
+                    id="electricityRate"
                     type="number"
                     step="0.001"
                     value={inputs.electricityRate}
                     onChange={e => update('electricityRate', parseFloat(e.target.value) || 0.2005)}
+                    className={errors.electricityRate ? 'border-destructive' : ''}
+                    aria-invalid={!!errors.electricityRate}
                   />
+                  {fieldError('electricityRate')}
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <Label>Discount Rate (%)</Label>
+                    <Label htmlFor="discountRate">Discount Rate (%)</Label>
                     <TooltipIcon text="Used to calculate the time-value of money. Default is 4.085% (10-year Treasury rate)." />
                   </div>
                   <Input
+                    id="discountRate"
                     type="number"
                     step="0.1"
                     value={(inputs.discountRate * 100).toFixed(3)}
                     onChange={e => update('discountRate', (parseFloat(e.target.value) || 4.085) / 100)}
+                    className={errors.discountRate ? 'border-destructive' : ''}
+                    aria-invalid={!!errors.discountRate}
                   />
+                  {fieldError('discountRate')}
                 </div>
               </div>
               <div>
@@ -199,6 +212,7 @@ const CalculatorForm = ({ onCalculate }: CalculatorFormProps) => {
                   />
                   <span className="text-sm font-medium w-16 text-right">{inputs.analysisYears} yrs</span>
                 </div>
+                {fieldError('analysisYears')}
               </div>
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div>
